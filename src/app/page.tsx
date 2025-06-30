@@ -1,17 +1,22 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { QLearningEnvironment, DEFAULT_CONFIG, CHALLENGING_CONFIG, Position, QLearningConfig } from '@/lib/qLearning';
+import { QLearningConfig, DEFAULT_CONFIG, CHALLENGING_CONFIG, LOCAL_MINIMA_CONFIG, Position, Cell, CellType } from '@/lib/qLearning';
+import { RLAlgorithmFactory, LearningMethod, RLEnvironment } from '@/lib/rlAlgorithms';
 import GridVisualization from '@/components/GridVisualization';
 import ControlsAndStats from '@/components/ControlsAndStats';
 import EpisodeHistory from '@/components/EpisodeHistory';
 import HyperparameterControls from '@/components/HyperparameterControls';
 import HighscoreBoard from '@/components/HighscoreBoard';
+import AlgorithmSelector from '@/components/AlgorithmSelector';
 
 export default function QLearningGrid() {
-  const [currentConfigType, setCurrentConfigType] = useState<'default' | 'challenging'>('default');
-  const [environment] = useState(() => new QLearningEnvironment(DEFAULT_CONFIG));
-  const [grid, setGrid] = useState(environment.getGrid());
+  const [currentConfigType, setCurrentConfigType] = useState<'default' | 'challenging' | 'localMinima'>('default');
+  const [currentMethod, setCurrentMethod] = useState<LearningMethod>('qlearning');
+  const [environment, setEnvironment] = useState<RLEnvironment>(() => 
+    RLAlgorithmFactory.createEnvironment('qlearning', DEFAULT_CONFIG)
+  );
+  const [grid, setGrid] = useState<Cell[][]>([]);
   const [agentPosition, setAgentPosition] = useState<Position>(DEFAULT_CONFIG.startPosition);
   const [episode, setEpisode] = useState(0);
   const [totalReward, setTotalReward] = useState(0);
@@ -19,23 +24,60 @@ export default function QLearningGrid() {
   const [episodeHistory, setEpisodeHistory] = useState<number[]>([]);
   const [config, setConfig] = useState<QLearningConfig>(DEFAULT_CONFIG);
 
+  // Convert SARSA grid to Q-Learning grid format for compatibility
+  const convertGridToCellFormat = useCallback((rlGrid: Cell[][] | CellType[][]): Cell[][] => {
+    if (currentMethod === 'qlearning') {
+      return rlGrid as Cell[][];
+    }
+    
+    // Convert SARSA grid format to Cell format
+    const cellGrid: Cell[][] = [];
+    const sarsaGrid = rlGrid as CellType[][];
+    
+    for (let row = 0; row < sarsaGrid.length; row++) {
+      cellGrid[row] = [];
+      for (let col = 0; col < sarsaGrid[row].length; col++) {
+        const cellType = sarsaGrid[row][col];
+        const qValues = environment.getQValuesForPosition({ row, col });
+        cellGrid[row][col] = {
+          type: cellType,
+          qValues
+        };
+      }
+    }
+    return cellGrid;
+  }, [currentMethod, environment]);
+
   // Switch between configurations
-  const switchConfiguration = useCallback((configType: 'default' | 'challenging') => {
-    const newConfig = configType === 'default' ? DEFAULT_CONFIG : CHALLENGING_CONFIG;
-    environment.updateConfig(newConfig);
-    setConfig(environment.getConfig());
-    setGrid(environment.getGrid());
-    setAgentPosition(environment.getCurrentPosition());
+  const switchConfiguration = useCallback((configType: 'default' | 'challenging' | 'localMinima') => {
+    const newConfig = configType === 'default' ? DEFAULT_CONFIG : configType === 'challenging' ? CHALLENGING_CONFIG : LOCAL_MINIMA_CONFIG;
+    const newEnvironment = RLAlgorithmFactory.createEnvironment(currentMethod, newConfig);
+    setEnvironment(newEnvironment);
+    setConfig(newEnvironment.getConfig());
+    setGrid(convertGridToCellFormat(newEnvironment.getGrid()));
+    setAgentPosition(newEnvironment.getCurrentPosition());
     setCurrentConfigType(configType);
     setEpisode(0);
     setTotalReward(0);
     setEpisodeHistory([]);
-  }, [environment]);
+  }, [currentMethod, convertGridToCellFormat]);
+
+  // Switch between learning methods
+  const switchLearningMethod = useCallback((method: LearningMethod) => {
+    const newEnvironment = RLAlgorithmFactory.createEnvironment(method, config);
+    setEnvironment(newEnvironment);
+    setCurrentMethod(method);
+    setGrid(convertGridToCellFormat(newEnvironment.getGrid()));
+    setAgentPosition(newEnvironment.getCurrentPosition());
+    setEpisode(0);
+    setTotalReward(0);
+    setEpisodeHistory([]);
+  }, [config, convertGridToCellFormat]);
 
   // Update grid from environment
   const updateGrid = useCallback(() => {
-    setGrid(environment.getGrid());
-  }, [environment]);
+    setGrid(convertGridToCellFormat(environment.getGrid()));
+  }, [environment, convertGridToCellFormat]);
 
   // Handle configuration changes
   const handleConfigChange = useCallback((newConfig: Partial<QLearningConfig>) => {
@@ -47,12 +89,12 @@ export default function QLearningGrid() {
   const resetEnvironment = useCallback(() => {
     environment.reset();
     environment.resetPosition();
-    setGrid(environment.getGrid());
+    setGrid(convertGridToCellFormat(environment.getGrid()));
     setAgentPosition(environment.getCurrentPosition());
     setEpisode(0);
     setTotalReward(0);
     setEpisodeHistory([]);
-  }, [environment]);
+  }, [environment, convertGridToCellFormat]);
 
   // Run one episode with visualization
   const runEpisode = useCallback(async () => {
@@ -134,8 +176,11 @@ export default function QLearningGrid() {
       <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <h1 className="text-2xl sm:text-3xl font-bold text-center text-gray-800">
-            Q-Learning Grid World
+            Reinforcement Learning Grid World
           </h1>
+          <p className="text-center text-gray-600 mt-2">
+            Compare Q-Learning and SARSA algorithms
+          </p>
         </div>
       </div>
 
@@ -147,7 +192,7 @@ export default function QLearningGrid() {
             <div className="flex bg-white rounded-lg shadow-sm border border-blue-200">
               <button
                 onClick={() => switchConfiguration('default')}
-                className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-colors ${
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
                   currentConfigType === 'default'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-blue-600 hover:bg-blue-50'
@@ -157,7 +202,7 @@ export default function QLearningGrid() {
               </button>
               <button
                 onClick={() => switchConfiguration('challenging')}
-                className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-colors ${
+                className={`px-4 py-2 text-sm font-medium border-l border-r border-blue-200 transition-colors ${
                   currentConfigType === 'challenging'
                     ? 'bg-blue-600 text-white'
                     : 'bg-white text-blue-600 hover:bg-blue-50'
@@ -165,11 +210,27 @@ export default function QLearningGrid() {
               >
                 Advanced (12×12)
               </button>
+              <button
+                onClick={() => switchConfiguration('localMinima')}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  currentConfigType === 'localMinima'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-blue-600 hover:bg-blue-50'
+                }`}
+              >
+                Local Minima (10×10)
+              </button>
             </div>
             {currentConfigType === 'challenging' && (
               <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
                 <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
                 Maze-like environment with multiple paths
+              </div>
+            )}
+            {currentConfigType === 'localMinima' && (
+              <div className="flex items-center gap-2 text-xs text-purple-700 bg-purple-100 px-3 py-1 rounded-full">
+                <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse"></span>
+                Reward islands that can trap the agent
               </div>
             )}
           </div>
@@ -180,6 +241,22 @@ export default function QLearningGrid() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Mobile Layout: Stacked */}
         <div className="lg:hidden space-y-6">
+          {/* Algorithm Selector */}
+          <AlgorithmSelector
+            currentMethod={currentMethod}
+            onMethodChange={switchLearningMethod}
+          />
+
+          {/* Highscore Board - Moved to top */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <HighscoreBoard
+              currentScore={totalReward}
+              currentEpisode={episode}
+              currentConfig={config}
+              currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
+            />
+          </div>
+
           {/* Grid Visualization */}
           <div className="bg-white rounded-lg shadow-lg p-4">
             <GridVisualization
@@ -188,6 +265,7 @@ export default function QLearningGrid() {
               startPosition={config.startPosition}
               goalPosition={config.goalPosition}
               hazardPositions={config.hazardPositions}
+              rewardPositions={config.rewardPositions}
               environment={environment}
               onCellClick={handleCellClick}
               useHeuristics={config.useDirectionalHeuristics}
@@ -207,48 +285,42 @@ export default function QLearningGrid() {
             />
           </div>
 
-          {/* Highscore Board - Prominent Display */}
-          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg shadow-lg border-2 border-yellow-200">
-            <HighscoreBoard
-              currentScore={totalReward}
-              currentEpisode={episode}
-              currentConfig={config}
-              currentMode={currentConfigType === 'default' ? 'easy' : 'complex'}
+          {/* Hyperparameter Controls */}
+          <div className="bg-white rounded-lg shadow-lg">
+            <HyperparameterControls
+              config={config}
+              onConfigChange={handleConfigChange}
+              currentMethod={currentMethod}
             />
           </div>
 
           {/* Episode History */}
           <div className="bg-white rounded-lg shadow-lg p-4">
-            <EpisodeHistory episodeHistory={episodeHistory} />
-          </div>
-
-          {/* Hyperparameter Controls - Scrollable */}
-          <div className="bg-white rounded-lg shadow-lg">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-800">Learning Parameters</h3>
-              <p className="text-sm text-gray-600 mt-1">Scroll to configure the Q-learning algorithm</p>
-            </div>
-            <div className="max-h-96 overflow-y-auto">
-              <HyperparameterControls
-                config={config}
-                onConfigChange={handleConfigChange}
-              />
-            </div>
+            <EpisodeHistory
+              episodeHistory={episodeHistory}
+            />
           </div>
         </div>
 
-        {/* Desktop Layout: Grid */}
-        <div className="hidden lg:grid lg:grid-cols-12 lg:gap-6">
-          {/* Left Column: Grid and Episode History */}
-          <div className="lg:col-span-8 space-y-6">
+        {/* Desktop Layout: Two-column with grid and controls on left, hyperparameters on right */}
+        <div className="hidden lg:grid lg:grid-cols-5 lg:gap-6">
+          {/* Left Column: Grid, Algorithm Selector, and Main Controls */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Algorithm Selector */}
+            <AlgorithmSelector
+              currentMethod={currentMethod}
+              onMethodChange={switchLearningMethod}
+            />
+
             {/* Grid Visualization */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <GridVisualization
                 grid={grid}
                 agentPosition={agentPosition}
                 startPosition={config.startPosition}
                 goalPosition={config.goalPosition}
                 hazardPositions={config.hazardPositions}
+                rewardPositions={config.rewardPositions}
                 environment={environment}
                 onCellClick={handleCellClick}
                 useHeuristics={config.useDirectionalHeuristics}
@@ -256,16 +328,8 @@ export default function QLearningGrid() {
               />
             </div>
 
-            {/* Episode History */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <EpisodeHistory episodeHistory={episodeHistory} />
-            </div>
-          </div>
-
-          {/* Right Column: Controls, Highscores, and Settings */}
-          <div className="lg:col-span-4 space-y-6">
             {/* Controls and Stats */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <ControlsAndStats
                 episode={episode}
                 totalReward={totalReward}
@@ -276,28 +340,33 @@ export default function QLearningGrid() {
               />
             </div>
 
-            {/* Highscore Board - Prominent Display */}
-            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg shadow-lg border-2 border-yellow-200">
+            {/* Highscore Board */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
               <HighscoreBoard
                 currentScore={totalReward}
                 currentEpisode={episode}
                 currentConfig={config}
-                currentMode={currentConfigType === 'default' ? 'easy' : 'complex'}
+                currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
+              />
+            </div>
+          </div>
+
+          {/* Right Column: Hyperparameters and History */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Hyperparameter Controls */}
+            <div className="bg-white rounded-lg shadow-lg">
+              <HyperparameterControls
+                config={config}
+                onConfigChange={handleConfigChange}
+                currentMethod={currentMethod}
               />
             </div>
 
-            {/* Hyperparameter Controls - Scrollable */}
-            <div className="bg-white rounded-lg shadow-lg">
-              <div className="p-4 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-800">Learning Parameters</h3>
-                <p className="text-sm text-gray-600 mt-1">Scroll to configure the Q-learning algorithm</p>
-              </div>
-              <div className="max-h-96 overflow-y-auto">
-                <HyperparameterControls
-                  config={config}
-                  onConfigChange={handleConfigChange}
-                />
-              </div>
+            {/* Episode History */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+              <EpisodeHistory
+                episodeHistory={episodeHistory}
+              />
             </div>
           </div>
         </div>

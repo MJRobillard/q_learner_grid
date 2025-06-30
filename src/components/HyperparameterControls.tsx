@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { QLearningConfig } from '@/lib/qLearning';
+import { LearningMethod } from '@/lib/rlAlgorithms';
 
 interface HyperparameterControlsProps {
   config: QLearningConfig;
   onConfigChange: (config: Partial<QLearningConfig>) => void;
+  currentMethod: LearningMethod;
 }
 
-export default function HyperparameterControls({ config, onConfigChange }: HyperparameterControlsProps) {
+export default function HyperparameterControls({ config, onConfigChange, currentMethod }: HyperparameterControlsProps) {
   const [expandedSections, setExpandedSections] = useState({
-    learning: true,
-    heuristics: true,
-    rewards: true
+    learning: false,
+    heuristics: false
   });
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -47,6 +48,23 @@ export default function HyperparameterControls({ config, onConfigChange }: Hyper
     </div>
   );
 
+  // Get the appropriate formula and explanation based on the current method
+  const getLearningFormula = () => {
+    if (currentMethod === 'sarsa') {
+      return {
+        formula: "Q(s,a) ← Q(s,a) + α[r + γ Q(s',a') - Q(s,a)]",
+        explanation: "SARSA update rule: Uses actual next action Q-value (on-policy), generally more conservative than Q-learning"
+      };
+    } else {
+      return {
+        formula: "Q(s,a) ← Q(s,a) + α[r + γ max Q(s',a') - Q(s,a)]",
+        explanation: "Q-learning update rule: Uses maximum Q-value for next state (off-policy), can be more aggressive"
+      };
+    }
+  };
+
+  const learningFormula = getLearningFormula();
+
   return (
     <div className="divide-y divide-gray-200">
       {/* Learning Parameters Section */}
@@ -58,8 +76,8 @@ export default function HyperparameterControls({ config, onConfigChange }: Hyper
         {expandedSections.learning && (
           <div className="p-4 space-y-4">
             <FormulaBox 
-              formula="Q(s,a) ← Q(s,a) + α[r + γ max Q(s',a') - Q(s,a)]"
-              explanation="Q-learning update rule: α (learning rate) controls how much new information overrides old Q-values"
+              formula={learningFormula.formula}
+              explanation={learningFormula.explanation}
             />
 
             <div>
@@ -131,6 +149,11 @@ export default function HyperparameterControls({ config, onConfigChange }: Hyper
                 <strong>High (0.3-0.5):</strong> More exploration, less exploitation<br/>
                 <strong>Medium (0.1-0.2):</strong> Balanced exploration/exploitation<br/>
                 <strong>Low (0.01-0.05):</strong> More exploitation, less exploration
+                {currentMethod === 'sarsa' && (
+                  <div className="mt-1 text-blue-600">
+                    <strong>SARSA Note:</strong> On-policy algorithm - exploration directly affects learned policy
+                  </div>
+                )}
               </div>
             </div>
 
@@ -155,6 +178,11 @@ export default function HyperparameterControls({ config, onConfigChange }: Hyper
                 <strong>Formula:</strong> ε = ε × decay_rate per episode<br/>
                 <strong>High (0.999):</strong> Slow decay, long exploration phase<br/>
                 <strong>Low (0.9):</strong> Fast decay, quick transition to exploitation
+                {currentMethod === 'sarsa' && (
+                  <div className="mt-1 text-blue-600">
+                    <strong>SARSA Note:</strong> Slower decay may be beneficial for on-policy learning
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -173,6 +201,14 @@ export default function HyperparameterControls({ config, onConfigChange }: Hyper
               formula="h(s) = (1 - d(s,goal)/max_distance) × weight"
               explanation="Heuristic reward based on distance to goal. Closer to goal = higher reward"
             />
+
+            {currentMethod === 'sarsa' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <div className="text-xs text-blue-700">
+                  <strong>SARSA Note:</strong> Heuristics work well with on-policy algorithms as they provide consistent directional guidance that aligns with the policy being learned.
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center">
               <input
@@ -233,80 +269,6 @@ export default function HyperparameterControls({ config, onConfigChange }: Hyper
                 </div>
               </div>
             )}
-          </div>
-        )}
-      </div>
-
-      {/* Rewards Section */}
-      <div>
-        <SectionHeader title="Reward Structure" section="rewards">
-          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Rewards</span>
-        </SectionHeader>
-        
-        {expandedSections.rewards && (
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Goal Reward: {config.rewards.goal}
-              </label>
-              <input
-                type="range"
-                min="10"
-                max="100"
-                step="5"
-                value={config.rewards.goal}
-                onChange={(e) => onConfigChange({ 
-                  rewards: { ...config.rewards, goal: parseInt(e.target.value) }
-                })}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>10</span>
-                <span>100</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Hazard Penalty: {config.rewards.hazard}
-              </label>
-              <input
-                type="range"
-                min="-100"
-                max="-10"
-                step="5"
-                value={config.rewards.hazard}
-                onChange={(e) => onConfigChange({ 
-                  rewards: { ...config.rewards, hazard: parseInt(e.target.value) }
-                })}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>-100</span>
-                <span>-10</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-600 mb-2">
-                Step Penalty: {config.rewards.step}
-              </label>
-              <input
-                type="range"
-                min="-5"
-                max="0"
-                step="1"
-                value={config.rewards.step}
-                onChange={(e) => onConfigChange({ 
-                  rewards: { ...config.rewards, step: parseInt(e.target.value) }
-                })}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>-5</span>
-                <span>0</span>
-              </div>
-            </div>
           </div>
         )}
       </div>

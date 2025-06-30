@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "highscores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "highscores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "mode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+} 

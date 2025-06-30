@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Cell, Position, Action, QLearningEnvironment, RewardPosition } from '@/lib/qLearning';
-import { RLEnvironment } from '@/lib/rlAlgorithms';
+import { RLEnvironment, LearningMethod } from '@/lib/rlAlgorithms';
+import AlgorithmSelector from './AlgorithmSelector';
+import HyperparameterModal from './HyperparameterModal';
 
-interface GridVisualizationProps {
+interface SimulationComponentProps {
   grid: Cell[][];
   agentPosition: Position;
   startPosition: Position;
@@ -13,9 +15,22 @@ interface GridVisualizationProps {
   onCellClick?: (row: number, col: number) => void;
   useHeuristics?: boolean;
   heuristicMethod?: string;
+  // Simulation control props
+  episode: number;
+  totalReward: number;
+  isRunning: boolean;
+  onRunEpisode: () => void;
+  onRunMultipleEpisodes: (count: number) => void;
+  onReset: () => void;
+  // Algorithm selection props
+  currentMethod: LearningMethod;
+  onMethodChange: (method: LearningMethod) => void;
+  // Config props for modal
+  config: any;
+  onConfigChange: (config: any) => void;
 }
 
-export default function GridVisualization({
+export default function SimulationComponent({
   grid,
   agentPosition,
   startPosition,
@@ -25,8 +40,40 @@ export default function GridVisualization({
   environment,
   onCellClick,
   useHeuristics,
-  heuristicMethod
-}: GridVisualizationProps) {
+  heuristicMethod,
+  // Simulation control props
+  episode,
+  totalReward,
+  isRunning,
+  onRunEpisode,
+  onRunMultipleEpisodes,
+  onReset,
+  // Algorithm selection props
+  currentMethod,
+  onMethodChange,
+  // Config props for modal
+  config,
+  onConfigChange
+}: SimulationComponentProps) {
+  const [showGoalQValues, setShowGoalQValues] = useState(false);
+  const [goalReached, setGoalReached] = useState(false);
+  const [showHyperparameterModal, setShowHyperparameterModal] = useState(false);
+
+  // Check if agent reached goal
+  const isAtGoal = agentPosition.row === goalPosition.row && agentPosition.col === goalPosition.col;
+  
+  // Update goal reached state
+  React.useEffect(() => {
+    if (isAtGoal && !goalReached) {
+      setGoalReached(true);
+      setShowGoalQValues(true);
+      // Auto-hide after 5 seconds
+      setTimeout(() => setShowGoalQValues(false), 5000);
+    } else if (!isAtGoal) {
+      setGoalReached(false);
+    }
+  }, [isAtGoal, goalReached]);
+
   // Type guard to check if environment is QLearningEnvironment
   const isQLearningEnv = (env: any): env is QLearningEnvironment => {
     return env && typeof env.getMaxValidQValue === 'function' && typeof env.getValidActions === 'function';
@@ -63,6 +110,10 @@ export default function GridVisualization({
       { action: 'up' as Action, value: -Infinity }
     );
     return bestAction.value > -Infinity ? bestAction.action : null;
+  };
+
+  const getQValuesForPosition = (pos: Position): Record<Action, number> => {
+    return environment.getQValuesForPosition(pos);
   };
 
   const getCellColor = (row: number, col: number) => {
@@ -130,7 +181,120 @@ Q-Values: ${qValuesString}`;
 
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
-      <h2 className="text-lg sm:text-xl font-semibold mb-4">Environment</h2>
+      <h2 className="text-lg sm:text-xl font-semibold mb-4">Simulation Environment</h2>
+      
+      {/* Algorithm Selector and Controls */}
+      <div className="mb-6 space-y-4">
+        {/* Algorithm Selector */}
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Learning Algorithm</h3>
+          <AlgorithmSelector
+            currentMethod={currentMethod}
+            onMethodChange={onMethodChange}
+          />
+        </div>
+
+        {/* Hyperparameter Button */}
+        <div>
+          <button
+            onClick={() => setShowHyperparameterModal(true)}
+            className="w-full bg-indigo-500 text-white py-2 px-4 rounded-lg hover:bg-indigo-600 transition-colors font-medium"
+          >
+            ⚙️ Configure Hyperparameters
+          </button>
+        </div>
+      </div>
+      
+      {/* Statistics Section */}
+      <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Current Statistics</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center">
+            <div className="text-xl font-bold text-blue-600">{episode}</div>
+            <div className="text-xs text-gray-500">Episode</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xl font-bold text-green-600">{totalReward}</div>
+            <div className="text-xs text-gray-500">Total Reward</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Control Buttons */}
+      <div className="mb-6 space-y-3">
+        {/* Single Episode Control */}
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Single Episode</h3>
+          <button
+            onClick={onRunEpisode}
+            disabled={isRunning}
+            className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          >
+            {isRunning ? 'Running...' : 'Run 1 Episode'}
+          </button>
+        </div>
+        
+        {/* Batch Episode Controls */}
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Batch Episodes</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => onRunMultipleEpisodes(10)}
+              disabled={isRunning}
+              className="bg-green-500 text-white py-2 px-3 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              {isRunning ? 'Running...' : 'Run 10'}
+            </button>
+            <button
+              onClick={() => onRunMultipleEpisodes(50)}
+              disabled={isRunning}
+              className="bg-purple-500 text-white py-2 px-3 rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              {isRunning ? 'Running...' : 'Run 50'}
+            </button>
+          </div>
+        </div>
+        
+        {/* Reset Control */}
+        <div>
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Environment</h3>
+          <button
+            onClick={onReset}
+            disabled={isRunning}
+            className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+          >
+            Reset Environment
+          </button>
+        </div>
+      </div>
+
+      {/* Goal Reached Q-Values Display */}
+      {showGoalQValues && isAtGoal && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-yellow-600 text-lg">🎯</span>
+            <h3 className="font-semibold text-yellow-800">Goal Reached! Q-Values at Goal State:</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            {Object.entries(getQValuesForPosition(goalPosition)).map(([action, value]) => (
+              <div key={action} className="flex justify-between items-center">
+                <span className="font-medium text-gray-700">
+                  {action === 'up' && '↑ Up'}
+                  {action === 'down' && '↓ Down'}
+                  {action === 'left' && '← Left'}
+                  {action === 'right' && '→ Right'}
+                </span>
+                <span className={`font-bold ${value >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {value.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-xs text-yellow-600">
+            This shows the learned Q-values for each action at the goal state. Higher values indicate better learned policies.
+          </div>
+        </div>
+      )}
       
       {/* Grid Container with responsive sizing */}
       <div className="flex justify-center">
@@ -241,6 +405,15 @@ Q-Values: ${qValuesString}`;
           Tap cells to see Q-values. Green intensity shows learning progress.
         </div>
       </div>
+
+      {/* Hyperparameter Modal */}
+      <HyperparameterModal
+        isOpen={showHyperparameterModal}
+        onClose={() => setShowHyperparameterModal(false)}
+        config={config}
+        onConfigChange={onConfigChange}
+        currentMethod={currentMethod}
+      />
     </div>
   );
 } 

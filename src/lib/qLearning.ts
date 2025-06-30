@@ -9,11 +9,26 @@ export interface Cell {
   qValues: Record<Action, number>;
 }
 
+export interface RewardPosition {
+  position: Position;
+  reward: number;
+}
+
+export interface QLearningConfigWithExtras extends QLearningConfig {
+  rewardPositions: RewardPosition[];
+  epsilonDecay: number;
+  minEpsilon: number;
+  convergenceThreshold: number;
+  maxEpisodes: number;
+  maxStepsPerEpisode: number;
+}
+
 export interface QLearningConfig {
   gridSize: number;
   startPosition: Position;
   goalPosition: Position;
   hazardPositions: Position[];
+  rewardPositions?: RewardPosition[]; // Optional for backward compatibility
   
   // learning params
   learningRate: number;        // α
@@ -122,6 +137,100 @@ export const CHALLENGING_CONFIG: QLearningConfig = {
   maxStepsPerEpisode: 200
 };
 
+export const LOCAL_MINIMA_CONFIG: QLearningConfigWithExtras = {
+  gridSize: 10,
+  startPosition: { row: 0, col: 0 },
+  goalPosition: { row: 9, col: 9 },
+
+  // Hazards form fences around each reward-island with multiple entrances
+  hazardPositions: [
+    // funnel out of the start
+    { row: 1, col: 0 }, 
+
+    // Island 1 @ (2,2) - multiple entrances
+    { row: 1, col: 2 }, { row: 2, col: 1 }, 
+    /* entrance at (2,3) */
+    { row: 3, col: 2 },
+    /* entrance at (2,4) */
+    { row: 1, col: 4 }, { row: 3, col: 4 },
+
+    // barrier row at y=4, openings only at x=3 and x=6
+    { row: 4, col: 0 }, { row: 4, col: 1 }, { row: 4, col: 2 },
+    /* gap at (4,3) */ 
+    { row: 4, col: 4 }, { row: 4, col: 5 },
+    /* gap at (4,6) */
+    { row: 4, col: 7 }, { row: 4, col: 8 },
+
+    // Island 2 @ (5,5) - multiple entrances
+    { row: 5, col: 4 }, 
+    /* entrance at (5,6) */
+    { row: 6, col: 5 },
+    /* entrance at (6,6) */
+    { row: 5, col: 7 }, { row: 7, col: 5 },
+
+    // Island 3 @ (7,2) - multiple entrances  
+    { row: 6, col: 2 }, { row: 7, col: 1 }, 
+    /* entrance at (7,3) */
+    { row: 8, col: 2 },
+    /* entrance at (8,3) */
+    { row: 6, col: 4 }, { row: 8, col: 4 },
+
+    // hazards near final goal to create a choke
+    { row: 8, col: 9 }, { row: 9, col: 8 },
+
+    // a couple of extra decoys
+    { row: 3, col: 7 }, { row: 6, col: 7 }
+  ],
+
+  // Multiple rewards inside each island (local maxima)
+  rewardPositions: [
+    // Island 1 rewards (2,2 area)
+    { position: { row: 2, col: 2 }, reward: 30 },
+    { position: { row: 2, col: 3 }, reward: 25 },
+    { position: { row: 3, col: 2 }, reward: 25 },
+    { position: { row: 2, col: 4 }, reward: 20 },
+    { position: { row: 3, col: 3 }, reward: 15 },
+
+    // Island 2 rewards (5,5 area)
+    { position: { row: 5, col: 5 }, reward: 40 },
+    { position: { row: 5, col: 6 }, reward: 35 },
+    { position: { row: 6, col: 5 }, reward: 35 },
+    { position: { row: 6, col: 6 }, reward: 30 },
+    { position: { row: 5, col: 7 }, reward: 25 },
+
+    // Island 3 rewards (7,2 area)
+    { position: { row: 7, col: 2 }, reward: 35 },
+    { position: { row: 7, col: 3 }, reward: 30 },
+    { position: { row: 8, col: 2 }, reward: 30 },
+    { position: { row: 8, col: 3 }, reward: 25 },
+    { position: { row: 7, col: 4 }, reward: 20 }
+  ],
+
+  // Final goal is worth substantially more
+  rewards: {
+    goal:   500,
+    hazard: -100,
+    step:   -2
+  },
+
+  learningRate:     0.1,
+  discountFactor:   0.8,    // undervalues long-term enough to trap on locals
+  epsilon:          0.2,
+  epsilonDecay:     0.995,
+  minEpsilon:       0.01,
+
+  // Heuristics can help, but the island traps still create real local optima
+  useDirectionalHeuristics: true,
+  heuristicWeight:          0.2,
+  heuristicMethod:          'manhattan',
+
+  normalizeRewards:   true,
+  normalizationMethod: 'minmax',
+
+  convergenceThreshold: 1e-5,
+  maxEpisodes:         5000,
+  maxStepsPerEpisode:  200
+};
 
 export interface StepResult {
   state: Position;
@@ -359,10 +468,20 @@ export class QLearningEnvironment {
   }
 
   private rawReward(pos: Position): number {
-    const { goalPosition, hazardPositions, rewards } = this.config;
+    const { goalPosition, hazardPositions, rewards, rewardPositions } = this.config;
     if (pos.row === goalPosition.row && pos.col === goalPosition.col) return rewards.goal;
     if (hazardPositions.some(h => h.row === pos.row && h.col === pos.col)) return rewards.hazard;
-    return rewards.step;
+    
+    // Check for reward positions (local maxima)
+    let rewardBonus = 0;
+    if (rewardPositions) {
+      const rewardPos = rewardPositions.find(rp => rp.position.row === pos.row && rp.position.col === pos.col);
+      if (rewardPos) {
+        rewardBonus = rewardPos.reward;
+      }
+    }
+    
+    return rewards.step + rewardBonus;
   }
 
   private normalize(r: number): number {
@@ -549,14 +668,56 @@ export class QLearningEnvironment {
     method: string;
   } {
     const distanceToGoal = this.calculateDistance(pos, this.config.goalPosition);
-    const heuristicReward = this.config.useDirectionalHeuristics ? 
-      (1 - distanceToGoal / (this.config.gridSize * 2)) * (this.config.heuristicWeight || 0.1) : 0;
-    
+    const heuristicReward = this.calculateHeuristicReward(pos, pos); // Simplified
     return {
       distanceToGoal,
       heuristicReward,
       useHeuristics: this.config.useDirectionalHeuristics || false,
       method: this.config.heuristicMethod || 'manhattan'
     };
+  }
+
+  // Add methods to match RLEnvironment interface
+  public getQValuesForPosition(pos: Position): Record<Action, number> {
+    const cell = this.grid[pos.row]?.[pos.col];
+    if (!cell) return { up: 0, down: 0, left: 0, right: 0 };
+    return { ...cell.qValues };
+  }
+
+  public getMinQValue(): number {
+    let minQ = Infinity;
+    for (let row = 0; row < this.config.gridSize; row++) {
+      for (let col = 0; col < this.config.gridSize; col++) {
+        const qValues = this.getQValuesForPosition({ row, col });
+        const minCellQ = Math.min(...Object.values(qValues));
+        minQ = Math.min(minQ, minCellQ);
+      }
+    }
+    return minQ === Infinity ? 0 : minQ;
+  }
+
+  public getMaxQValue(): number {
+    let maxQ = -Infinity;
+    for (let row = 0; row < this.config.gridSize; row++) {
+      for (let col = 0; col < this.config.gridSize; col++) {
+        const qValues = this.getQValuesForPosition({ row, col });
+        const maxCellQ = Math.max(...Object.values(qValues));
+        maxQ = Math.max(maxQ, maxCellQ);
+      }
+    }
+    return maxQ === -Infinity ? 0 : maxQ;
+  }
+
+  public getAverageQValue(): number {
+    let totalQ = 0;
+    let count = 0;
+    for (let row = 0; row < this.config.gridSize; row++) {
+      for (let col = 0; col < this.config.gridSize; col++) {
+        const qValues = this.getQValuesForPosition({ row, col });
+        totalQ += Object.values(qValues).reduce((sum, q) => sum + q, 0);
+        count += Object.keys(qValues).length;
+      }
+    }
+    return count > 0 ? totalQ / count : 0;
   }
 }
