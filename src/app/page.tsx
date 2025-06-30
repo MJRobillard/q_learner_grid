@@ -1,103 +1,307 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect, useCallback } from 'react';
+import { QLearningEnvironment, DEFAULT_CONFIG, CHALLENGING_CONFIG, Position, QLearningConfig } from '@/lib/qLearning';
+import GridVisualization from '@/components/GridVisualization';
+import ControlsAndStats from '@/components/ControlsAndStats';
+import EpisodeHistory from '@/components/EpisodeHistory';
+import HyperparameterControls from '@/components/HyperparameterControls';
+import HighscoreBoard from '@/components/HighscoreBoard';
+
+export default function QLearningGrid() {
+  const [currentConfigType, setCurrentConfigType] = useState<'default' | 'challenging'>('default');
+  const [environment] = useState(() => new QLearningEnvironment(DEFAULT_CONFIG));
+  const [grid, setGrid] = useState(environment.getGrid());
+  const [agentPosition, setAgentPosition] = useState<Position>(DEFAULT_CONFIG.startPosition);
+  const [episode, setEpisode] = useState(0);
+  const [totalReward, setTotalReward] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const [episodeHistory, setEpisodeHistory] = useState<number[]>([]);
+  const [config, setConfig] = useState<QLearningConfig>(DEFAULT_CONFIG);
+
+  // Switch between configurations
+  const switchConfiguration = useCallback((configType: 'default' | 'challenging') => {
+    const newConfig = configType === 'default' ? DEFAULT_CONFIG : CHALLENGING_CONFIG;
+    environment.updateConfig(newConfig);
+    setConfig(environment.getConfig());
+    setGrid(environment.getGrid());
+    setAgentPosition(environment.getCurrentPosition());
+    setCurrentConfigType(configType);
+    setEpisode(0);
+    setTotalReward(0);
+    setEpisodeHistory([]);
+  }, [environment]);
+
+  // Update grid from environment
+  const updateGrid = useCallback(() => {
+    setGrid(environment.getGrid());
+  }, [environment]);
+
+  // Handle configuration changes
+  const handleConfigChange = useCallback((newConfig: Partial<QLearningConfig>) => {
+    environment.updateConfig(newConfig);
+    setConfig(environment.getConfig());
+  }, [environment]);
+
+  // Reset environment
+  const resetEnvironment = useCallback(() => {
+    environment.reset();
+    environment.resetPosition();
+    setGrid(environment.getGrid());
+    setAgentPosition(environment.getCurrentPosition());
+    setEpisode(0);
+    setTotalReward(0);
+    setEpisodeHistory([]);
+  }, [environment]);
+
+  // Run one episode with visualization
+  const runEpisode = useCallback(async () => {
+    if (isRunning) return;
+    
+    setIsRunning(true);
+    let episodeReward = 0;
+    let steps = 0;
+    const maxSteps = 100;
+    
+    // Reset environment position
+    environment.resetPosition();
+    setAgentPosition(environment.getCurrentPosition());
+    
+    while (steps < maxSteps) {
+      // Take a step
+      const stepResult = environment.step();
+      
+      if (!stepResult) {
+        // Episode finished
+        break;
+      }
+      
+      // Update agent position
+      setAgentPosition(stepResult.nextState);
+      
+      // Update reward
+      episodeReward += stepResult.reward;
+      setTotalReward(episodeReward);
+      
+      steps++;
+      
+      // Update grid display
+      updateGrid();
+      
+      // Add delay for visualization
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    setEpisode(prev => prev + 1);
+    setEpisodeHistory(prev => [...prev, episodeReward]); // Keep all episodes
+    setIsRunning(false);
+  }, [environment, isRunning, updateGrid]);
+
+  // Run multiple episodes
+  const runMultipleEpisodes = useCallback(async (count: number) => {
+    if (isRunning) return;
+    
+    setIsRunning(true);
+    for (let i = 0; i < count; i++) {
+      const result = environment.runEpisode();
+      setEpisode(prev => prev + 1);
+      setEpisodeHistory(prev => [...prev, result.totalReward]); // Keep all episodes
+      setTotalReward(result.totalReward);
+      
+      // Update grid display
+      updateGrid();
+      
+      // Small delay between episodes
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    setIsRunning(false);
+  }, [environment, isRunning, updateGrid]);
+
+  // Initialize on component mount
+  useEffect(() => {
+    resetEnvironment();
+  }, [resetEnvironment]);
+
+  // Handle cell click (optional feature)
+  const handleCellClick = (row: number, col: number) => {
+    console.log(`Clicked cell (${row}, ${col})`);
+    // You could add features like setting hazards, start/goal positions, etc.
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-2xl sm:text-3xl font-bold text-center text-gray-800">
+            Q-Learning Grid World
+          </h1>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+
+      {/* Configuration Selector */}
+      <div className="bg-blue-50 border-b border-blue-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <span className="text-sm font-medium text-blue-800">Grid Configuration:</span>
+            <div className="flex bg-white rounded-lg shadow-sm border border-blue-200">
+              <button
+                onClick={() => switchConfiguration('default')}
+                className={`px-4 py-2 text-sm font-medium rounded-l-lg transition-colors ${
+                  currentConfigType === 'default'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-blue-600 hover:bg-blue-50'
+                }`}
+              >
+                Beginner (8×8)
+              </button>
+              <button
+                onClick={() => switchConfiguration('challenging')}
+                className={`px-4 py-2 text-sm font-medium rounded-r-lg transition-colors ${
+                  currentConfigType === 'challenging'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-blue-600 hover:bg-blue-50'
+                }`}
+              >
+                Advanced (12×12)
+              </button>
+            </div>
+            {currentConfigType === 'challenging' && (
+              <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
+                <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
+                Maze-like environment with multiple paths
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Mobile Layout: Stacked */}
+        <div className="lg:hidden space-y-6">
+          {/* Grid Visualization */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <GridVisualization
+              grid={grid}
+              agentPosition={agentPosition}
+              startPosition={config.startPosition}
+              goalPosition={config.goalPosition}
+              hazardPositions={config.hazardPositions}
+              environment={environment}
+              onCellClick={handleCellClick}
+              useHeuristics={config.useDirectionalHeuristics}
+              heuristicMethod={config.heuristicMethod}
+            />
+          </div>
+
+          {/* Controls and Stats */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <ControlsAndStats
+              episode={episode}
+              totalReward={totalReward}
+              isRunning={isRunning}
+              onRunEpisode={runEpisode}
+              onRunMultipleEpisodes={runMultipleEpisodes}
+              onReset={resetEnvironment}
+            />
+          </div>
+
+          {/* Highscore Board - Prominent Display */}
+          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg shadow-lg border-2 border-yellow-200">
+            <HighscoreBoard
+              currentScore={totalReward}
+              currentEpisode={episode}
+              currentConfig={config}
+              currentMode={currentConfigType === 'default' ? 'easy' : 'complex'}
+            />
+          </div>
+
+          {/* Episode History */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <EpisodeHistory episodeHistory={episodeHistory} />
+          </div>
+
+          {/* Hyperparameter Controls - Scrollable */}
+          <div className="bg-white rounded-lg shadow-lg">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-800">Learning Parameters</h3>
+              <p className="text-sm text-gray-600 mt-1">Scroll to configure the Q-learning algorithm</p>
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              <HyperparameterControls
+                config={config}
+                onConfigChange={handleConfigChange}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Layout: Grid */}
+        <div className="hidden lg:grid lg:grid-cols-12 lg:gap-6">
+          {/* Left Column: Grid and Episode History */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Grid Visualization */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <GridVisualization
+                grid={grid}
+                agentPosition={agentPosition}
+                startPosition={config.startPosition}
+                goalPosition={config.goalPosition}
+                hazardPositions={config.hazardPositions}
+                environment={environment}
+                onCellClick={handleCellClick}
+                useHeuristics={config.useDirectionalHeuristics}
+                heuristicMethod={config.heuristicMethod}
+              />
+            </div>
+
+            {/* Episode History */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <EpisodeHistory episodeHistory={episodeHistory} />
+            </div>
+          </div>
+
+          {/* Right Column: Controls, Highscores, and Settings */}
+          <div className="lg:col-span-4 space-y-6">
+            {/* Controls and Stats */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <ControlsAndStats
+                episode={episode}
+                totalReward={totalReward}
+                isRunning={isRunning}
+                onRunEpisode={runEpisode}
+                onRunMultipleEpisodes={runMultipleEpisodes}
+                onReset={resetEnvironment}
+              />
+            </div>
+
+            {/* Highscore Board - Prominent Display */}
+            <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg shadow-lg border-2 border-yellow-200">
+              <HighscoreBoard
+                currentScore={totalReward}
+                currentEpisode={episode}
+                currentConfig={config}
+                currentMode={currentConfigType === 'default' ? 'easy' : 'complex'}
+              />
+            </div>
+
+            {/* Hyperparameter Controls - Scrollable */}
+            <div className="bg-white rounded-lg shadow-lg">
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-800">Learning Parameters</h3>
+                <p className="text-sm text-gray-600 mt-1">Scroll to configure the Q-learning algorithm</p>
+              </div>
+              <div className="max-h-96 overflow-y-auto">
+                <HyperparameterControls
+                  config={config}
+                  onConfigChange={handleConfigChange}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
-}
+} 
