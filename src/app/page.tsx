@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { QLearningConfig, DEFAULT_CONFIG, CHALLENGING_CONFIG, LOCAL_MINIMA_CONFIG, Position, Cell, CellType } from '@/lib/qLearning';
+import { QLearningConfig, DEFAULT_CONFIG, CHALLENGING_CONFIG, LOCAL_MINIMA_CONFIG, Position, Cell, CellType, generateRandomBinomialHazardsConfig } from '@/lib/qLearning';
 import { RLAlgorithmFactory, LearningMethod, RLEnvironment } from '@/lib/rlAlgorithms';
 import GridVisualization from '@/components/GridVisualization';
 import ControlsAndStats from '@/components/ControlsAndStats';
@@ -11,7 +11,7 @@ import HighscoreBoard from '@/components/HighscoreBoard';
 import AlgorithmSelector from '@/components/AlgorithmSelector';
 
 export default function QLearningGrid() {
-  const [currentConfigType, setCurrentConfigType] = useState<'default' | 'challenging' | 'localMinima'>('default');
+  const [currentConfigType, setCurrentConfigType] = useState<'default' | 'challenging' | 'localMinima' | 'randomBinomial'>('default');
   const [currentMethod, setCurrentMethod] = useState<LearningMethod>('qlearning');
   const [environment, setEnvironment] = useState<RLEnvironment>(() => 
     RLAlgorithmFactory.createEnvironment('qlearning', DEFAULT_CONFIG)
@@ -49,8 +49,12 @@ export default function QLearningGrid() {
   }, [currentMethod, environment]);
 
   // Switch between configurations
-  const switchConfiguration = useCallback((configType: 'default' | 'challenging' | 'localMinima') => {
-    const newConfig = configType === 'default' ? DEFAULT_CONFIG : configType === 'challenging' ? CHALLENGING_CONFIG : LOCAL_MINIMA_CONFIG;
+  const switchConfiguration = useCallback((configType: 'default' | 'challenging' | 'localMinima' | 'randomBinomial') => {
+    let newConfig: QLearningConfig;
+    if (configType === 'default') newConfig = DEFAULT_CONFIG;
+    else if (configType === 'challenging') newConfig = CHALLENGING_CONFIG;
+    else if (configType === 'localMinima') newConfig = LOCAL_MINIMA_CONFIG;
+    else newConfig = generateRandomBinomialHazardsConfig();
     const newEnvironment = RLAlgorithmFactory.createEnvironment(currentMethod, newConfig);
     setEnvironment(newEnvironment);
     setConfig(newEnvironment.getConfig());
@@ -208,7 +212,7 @@ export default function QLearningGrid() {
                     : 'bg-white text-blue-600 hover:bg-blue-50'
                 }`}
               >
-                Advanced (12×12)
+                Advanced (10×10)
               </button>
               <button
                 onClick={() => switchConfiguration('localMinima')}
@@ -219,6 +223,16 @@ export default function QLearningGrid() {
                 }`}
               >
                 Local Minima (10×10)
+              </button>
+              <button
+                onClick={() => switchConfiguration('randomBinomial')}
+                className={`px-4 py-2 text-sm font-medium border-l border-blue-200 transition-colors ${
+                  currentConfigType === 'randomBinomial'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-white text-green-700 hover:bg-green-50'
+                }`}
+              >
+                Random Binomial (10×10)
               </button>
             </div>
             {currentConfigType === 'challenging' && (
@@ -231,6 +245,12 @@ export default function QLearningGrid() {
               <div className="flex items-center gap-2 text-xs text-purple-700 bg-purple-100 px-3 py-1 rounded-full">
                 <span className="w-2 h-2 bg-purple-600 rounded-full animate-pulse"></span>
                 Reward islands that can trap the agent
+              </div>
+            )}
+            {currentConfigType === 'randomBinomial' && (
+              <div className="flex items-center gap-2 text-xs text-green-700 bg-green-100 px-3 py-1 rounded-full">
+                <span className="w-2 h-2 bg-green-600 rounded-full animate-pulse"></span>
+                Hazards cluster near (3,3) and (7,7); goal is random
               </div>
             )}
           </div>
@@ -269,7 +289,7 @@ export default function QLearningGrid() {
               currentScore={totalReward}
               currentEpisode={episode}
               currentConfig={config}
-              currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
+              currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : currentConfigType === 'localMinima' ? 'localMinima' : 'randomBinomial'}
             />
           </div>
 
@@ -328,7 +348,7 @@ export default function QLearningGrid() {
                 currentScore={totalReward}
                 currentEpisode={episode}
                 currentConfig={config}
-                currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
+                currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : currentConfigType === 'localMinima' ? 'localMinima' : 'randomBinomial'}
               />
             </div>
 

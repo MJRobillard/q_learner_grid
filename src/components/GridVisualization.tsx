@@ -213,34 +213,53 @@ Q-Values: ${qValuesString}`;
               const bestAction = getBestAction(row, col);
               const maxQValue = cell ? getMaxValidQValue({ row, col }) : 0;
               const isAgentHere = agentPosition.row === row && agentPosition.col === col;
-              
+              const isStart = row === startPosition.row && col === startPosition.col;
+              const isGoal = row === goalPosition.row && col === goalPosition.col;
+              const isHazard = hazardPositions.some(h => h.row === row && h.col === col);
+              const isReward = rewardPositions?.some(rp => rp.position.row === row && rp.position.col === col);
+
+              // Compute gradient background for Q-value cells
+              let cellStyle = {};
+              if (!isAgentHere && !isStart && !isGoal && !isHazard && !isReward) {
+                // Q-value cell
+                let color = '#e5e7eb'; // default gray
+                if (maxQValue > 0) {
+                  // Green gradient for positive Q
+                  const intensity = Math.min(maxQValue / 50, 1);
+                  color = `rgba(34,197,94,${0.15 + 0.65 * intensity})`;
+                } else if (maxQValue < 0) {
+                  // Red gradient for negative Q
+                  const intensity = Math.min(Math.abs(maxQValue) / 50, 1);
+                  color = `rgba(239,68,68,${0.15 + 0.65 * intensity})`;
+                }
+                cellStyle = { background: color };
+              }
+
               return (
                 <div
                   key={`${row}-${col}`}
-                  className={`
-                    w-8 h-8 sm:w-12 sm:h-12 border border-gray-300 flex flex-col items-center justify-center text-xs font-mono cursor-pointer
-                    ${getCellColor(row, col)}
-                    hover:opacity-80 transition-opacity
+                  className={`w-8 h-8 sm:w-12 sm:h-12 border border-gray-300 flex flex-col items-center justify-center text-xs font-mono cursor-pointer hover:opacity-80 transition-opacity
+                    ${isAgentHere ? 'bg-blue-500' : ''}
+                    ${isStart && !isAgentHere ? 'bg-green-300' : ''}
+                    ${isGoal && !isAgentHere ? 'bg-yellow-300' : ''}
+                    ${isHazard && !isAgentHere ? 'bg-red-300' : ''}
+                    ${isReward && !isAgentHere ? 'bg-purple-300' : ''}
                   `}
+                  style={cellStyle}
                   onClick={() => onCellClick?.(row, col)}
                   title={getCellTitle(row, col)}
                 >
                   {isAgentHere && <span className="text-xs sm:text-sm">🤖</span>}
-                  {row === startPosition.row && col === startPosition.col && !isAgentHere && <span className="text-xs sm:text-sm">🚀</span>}
-                  {row === goalPosition.row && col === goalPosition.col && !isAgentHere && <span className="text-xs sm:text-sm">🎯</span>}
-                  {hazardPositions.some(h => h.row === row && h.col === col) && !isAgentHere && <span className="text-xs sm:text-sm">💀</span>}
-                  {rewardPositions?.some(rp => rp.position.row === row && rp.position.col === col) && !isAgentHere && <span className="text-xs sm:text-sm">💰</span>}
-                  
-                  {/* Show Q-value and best action for non-special cells */}
-                  {!isAgentHere && 
-                   (row !== startPosition.row || col !== startPosition.col) &&
-                   (row !== goalPosition.row || col !== goalPosition.col) &&
-                   !hazardPositions.some(h => h.row === row && h.col === col) &&
-                   !rewardPositions?.some(rp => rp.position.row === row && rp.position.col === col) && (
+                  {isStart && !isAgentHere && <span className="text-xs sm:text-sm">🚀</span>}
+                  {isGoal && !isAgentHere && <span className="text-xs sm:text-sm">🎯</span>}
+                  {isHazard && !isAgentHere && <span className="text-xs sm:text-sm">💀</span>}
+                  {isReward && !isAgentHere && <span className="text-xs sm:text-sm">💰</span>}
+                  {/* Always show Q-value and best action for regular cells */}
+                  {!isAgentHere && !isStart && !isGoal && !isHazard && !isReward && (
                     <>
-                      <div className="font-bold text-xs hidden sm:block">{maxQValue.toFixed(1)}</div>
+                      <div className="font-bold text-xs">{maxQValue.toFixed(1)}</div>
                       {bestAction && (
-                        <div className="text-xs hidden sm:block">
+                        <div className="text-xs">
                           {bestAction === 'up' && '↑'}
                           {bestAction === 'down' && '↓'}
                           {bestAction === 'left' && '←'}

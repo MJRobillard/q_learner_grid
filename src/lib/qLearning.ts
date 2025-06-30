@@ -89,9 +89,9 @@ export const DEFAULT_CONFIG: QLearningConfig = {
 };
 
 export const CHALLENGING_CONFIG: QLearningConfig = {
-  gridSize: 12,
+  gridSize: 10,
   startPosition: { row: 0, col: 0 },
-  goalPosition: { row: 11, col: 11 },
+  goalPosition: { row: 5, col: 7 },
   hazardPositions: [
     // Top-left bottleneck
     { row: 1, col: 1 }, { row: 1, col: 2 },
@@ -101,7 +101,7 @@ export const CHALLENGING_CONFIG: QLearningConfig = {
     { row: 3, col: 3 }, { row: 3, col: 4 },
     { row: 4, col: 4 }, { row: 4, col: 5 },
     { row: 5, col: 5 }, { row: 5, col: 6 },
-    { row: 6, col: 6 }, { row: 6, col: 7 },
+    { row: 6, col: 6 }, 
 
     // Right-side detour hazards
     { row: 2, col: 8 }, { row: 3, col: 8 },
@@ -114,8 +114,8 @@ export const CHALLENGING_CONFIG: QLearningConfig = {
     // Strategic edge hazards to discourage hugging walls
     { row: 0, col: 6 }, { row: 0, col: 7 },
     { row: 6, col: 0 }, { row: 7, col: 0 },
-    { row: 11, col: 6 }, { row: 11, col: 7 },
-    { row: 6, col: 11 }, { row: 7, col: 11 }
+    { row: 9, col: 6 }, { row: 9, col: 7 },
+    { row: 6, col: 9 }, { row: 7, col: 9 }
   ],
   learningRate: 0.15,
   discountFactor: 0.95,
@@ -231,6 +231,83 @@ export const LOCAL_MINIMA_CONFIG: QLearningConfigWithExtras = {
   maxEpisodes:         5000,
   maxStepsPerEpisode:  200
 };
+
+export function generateRandomBinomialHazardsConfig(seed: number = Date.now()): QLearningConfig {
+  // Helper for seeded random
+  function mulberry32(a: number) {
+    return function() {
+      var t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+  }
+  const rand = mulberry32(seed);
+  const gridSize = 10;
+  const startPosition = { row: 0, col: 0 };
+  // Binomial distribution parameters
+  const centers = [
+    { row: 3, col: 3 },
+    { row: 7, col: 7 }
+  ];
+  const stddev = 1.5;
+  const hazardPositions: Position[] = [];
+  // For each cell, decide if it's a hazard
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      // Don't put hazard at start
+      if (row === startPosition.row && col === startPosition.col) continue;
+      // Calculate probability from both centers
+      let prob = 0;
+      for (const center of centers) {
+        const d2 = (row - center.row) ** 2 + (col - center.col) ** 2;
+        prob += Math.exp(-d2 / (2 * stddev * stddev));
+      }
+      prob = Math.min(prob, 0.7); // Cap probability
+      if (rand() < prob) {
+        hazardPositions.push({ row, col });
+      }
+    }
+  }
+  // Pick a random goal location not at start or hazard
+  let goalPosition: Position = { row: 9, col: 9 };
+  const freeCells = [];
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      if ((row !== startPosition.row || col !== startPosition.col) &&
+          !hazardPositions.some(h => h.row === row && h.col === col)) {
+        freeCells.push({ row, col });
+      }
+    }
+  }
+  if (freeCells.length > 0) {
+    goalPosition = freeCells[Math.floor(rand() * freeCells.length)];
+  }
+  return {
+    gridSize,
+    startPosition,
+    goalPosition,
+    hazardPositions,
+    learningRate: 0.15,
+    discountFactor: 0.95,
+    epsilon: 0.2,
+    epsilonDecay: 0.998,
+    minEpsilon: 0.05,
+    rewards: {
+      goal: 1000,
+      hazard: -200,
+      step: -2
+    },
+    useDirectionalHeuristics: true,
+    heuristicWeight: 0.2,
+    heuristicMethod: 'manhattan',
+    normalizeRewards: true,
+    normalizationMethod: 'minmax',
+    convergenceThreshold: 1e-5,
+    maxEpisodes: 2000,
+    maxStepsPerEpisode: 200
+  };
+}
 
 export interface StepResult {
   state: Position;

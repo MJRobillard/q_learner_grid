@@ -30,7 +30,7 @@ export interface HighscoreEntry {
   score: number;
   episode: number;
   config: any;
-  mode: 'easy' | 'complex' | 'localMinima';
+  mode: 'easy' | 'complex' | 'localMinima' | 'randomBinomial';
   timestamp: number;
   userId?: string;
 }

@@ -6,7 +6,7 @@ interface HighscoreBoardProps {
   currentScore: number;
   currentEpisode: number;
   currentConfig: QLearningConfig;
-  currentMode: 'easy' | 'complex' | 'localMinima';
+  currentMode: 'easy' | 'complex' | 'localMinima' | 'randomBinomial';
   onScoreSubmitted?: () => void;
 }
 
@@ -179,10 +179,11 @@ export default function HighscoreBoard({
     return base + heuristics;
   };
 
-  const formatMode = (mode: 'easy' | 'complex' | 'localMinima') => {
+  const formatMode = (mode: 'easy' | 'complex' | 'localMinima' | 'randomBinomial') => {
     if (mode === 'easy') return '🟢 Easy (8×8)';
     if (mode === 'complex') return '🔴 Complex (12×12)';
-    if (mode === 'localMinima') return '🟤 Local Minima';
+    if (mode === 'localMinima') return '�� Local Minima';
+    if (mode === 'randomBinomial') return '🟩 Random Binomial (10×10)';
     return 'Unknown Mode';
   };
 
