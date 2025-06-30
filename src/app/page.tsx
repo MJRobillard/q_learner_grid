@@ -241,23 +241,7 @@ export default function QLearningGrid() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Mobile Layout: Stacked */}
         <div className="lg:hidden space-y-6">
-          {/* Algorithm Selector */}
-          <AlgorithmSelector
-            currentMethod={currentMethod}
-            onMethodChange={switchLearningMethod}
-          />
-
-          {/* Highscore Board - Moved to top */}
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <HighscoreBoard
-              currentScore={totalReward}
-              currentEpisode={episode}
-              currentConfig={config}
-              currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
-            />
-          </div>
-
-          {/* Grid Visualization */}
+          {/* Grid Visualization - Environment first */}
           <div className="bg-white rounded-lg shadow-lg p-4">
             <GridVisualization
               grid={grid}
@@ -270,12 +254,6 @@ export default function QLearningGrid() {
               onCellClick={handleCellClick}
               useHeuristics={config.useDirectionalHeuristics}
               heuristicMethod={config.heuristicMethod}
-            />
-          </div>
-
-          {/* Controls and Stats */}
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <ControlsAndStats
               episode={episode}
               totalReward={totalReward}
               isRunning={isRunning}
@@ -284,6 +262,22 @@ export default function QLearningGrid() {
               onReset={resetEnvironment}
             />
           </div>
+
+          {/* Highscore Board - Hall of Fame second */}
+          <div className="bg-white rounded-lg shadow-lg p-4">
+            <HighscoreBoard
+              currentScore={totalReward}
+              currentEpisode={episode}
+              currentConfig={config}
+              currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
+            />
+          </div>
+
+          {/* Algorithm Selector - Learning Style third */}
+          <AlgorithmSelector
+            currentMethod={currentMethod}
+            onMethodChange={switchLearningMethod}
+          />
 
           {/* Hyperparameter Controls */}
           <div className="bg-white rounded-lg shadow-lg">
@@ -304,15 +298,9 @@ export default function QLearningGrid() {
 
         {/* Desktop Layout: Two-column with grid and controls on left, hyperparameters on right */}
         <div className="hidden lg:grid lg:grid-cols-5 lg:gap-6">
-          {/* Left Column: Grid, Algorithm Selector, and Main Controls */}
+          {/* Left Column: Environment, Hall of Fame, Learning Style */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Algorithm Selector */}
-            <AlgorithmSelector
-              currentMethod={currentMethod}
-              onMethodChange={switchLearningMethod}
-            />
-
-            {/* Grid Visualization */}
+            {/* Grid Visualization - Environment first */}
             <div className="bg-white rounded-lg shadow-lg p-4">
               <GridVisualization
                 grid={grid}
@@ -325,12 +313,6 @@ export default function QLearningGrid() {
                 onCellClick={handleCellClick}
                 useHeuristics={config.useDirectionalHeuristics}
                 heuristicMethod={config.heuristicMethod}
-              />
-            </div>
-
-            {/* Controls and Stats */}
-            <div className="bg-white rounded-lg shadow-lg p-4">
-              <ControlsAndStats
                 episode={episode}
                 totalReward={totalReward}
                 isRunning={isRunning}
@@ -340,7 +322,7 @@ export default function QLearningGrid() {
               />
             </div>
 
-            {/* Highscore Board */}
+            {/* Highscore Board - Hall of Fame second */}
             <div className="bg-white rounded-lg shadow-lg p-4">
               <HighscoreBoard
                 currentScore={totalReward}
@@ -349,6 +331,12 @@ export default function QLearningGrid() {
                 currentMode={currentConfigType === 'default' ? 'easy' : currentConfigType === 'challenging' ? 'complex' : 'localMinima'}
               />
             </div>
+
+            {/* Algorithm Selector - Learning Style third */}
+            <AlgorithmSelector
+              currentMethod={currentMethod}
+              onMethodChange={switchLearningMethod}
+            />
           </div>
 
           {/* Right Column: Hyperparameters and History */}

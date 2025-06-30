@@ -13,6 +13,12 @@ interface GridVisualizationProps {
   onCellClick?: (row: number, col: number) => void;
   useHeuristics?: boolean;
   heuristicMethod?: string;
+  episode?: number;
+  totalReward?: number;
+  isRunning?: boolean;
+  onRunEpisode?: () => void;
+  onRunMultipleEpisodes?: (count: number) => void;
+  onReset?: () => void;
 }
 
 export default function GridVisualization({
@@ -25,7 +31,13 @@ export default function GridVisualization({
   environment,
   onCellClick,
   useHeuristics,
-  heuristicMethod
+  heuristicMethod,
+  episode,
+  totalReward,
+  isRunning,
+  onRunEpisode,
+  onRunMultipleEpisodes,
+  onReset
 }: GridVisualizationProps) {
   // Type guard to check if environment is QLearningEnvironment
   const isQLearningEnv = (env: any): env is QLearningEnvironment => {
@@ -128,8 +140,61 @@ Q-Values: ${qValuesString}`;
     return getBestValidAction({ row, col });
   };
 
+  // Add state for dropdown
+  const [batchCount, setBatchCount] = React.useState(10);
+
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
+      {/* Episode Controls and Stats - Mobile optimized */}
+      {(typeof episode === 'number' && typeof totalReward === 'number') && (
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex flex-row gap-4 justify-between sm:justify-start">
+            <div className="text-center">
+              <div className="text-xl font-bold text-blue-600">{episode}</div>
+              <div className="text-xs text-gray-500">Episode</div>
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-bold text-green-600">{totalReward}</div>
+              <div className="text-xs text-gray-500">Total Reward</div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 w-full sm:w-auto">
+            <button
+              onClick={onRunEpisode}
+              disabled={isRunning}
+              className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              {isRunning ? 'Running...' : 'Run 1 Episode'}
+            </button>
+            <div className="flex flex-row gap-2 items-center">
+              <select
+                value={batchCount}
+                onChange={e => setBatchCount(Number(e.target.value))}
+                className="rounded border-gray-300 px-2 py-1 text-sm"
+                disabled={isRunning}
+              >
+                {[10, 25, 50, 100].map(count => (
+                  <option key={count} value={count}>{count} Episodes</option>
+                ))}
+              </select>
+              <button
+                onClick={() => onRunMultipleEpisodes && onRunMultipleEpisodes(batchCount)}
+                disabled={isRunning}
+                className="bg-green-500 text-white py-2 px-3 rounded hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+              >
+                {isRunning ? 'Running...' : `Run ${batchCount}`}
+              </button>
+            </div>
+            <button
+              onClick={onReset}
+              disabled={isRunning}
+              className="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              Reset Environment
+            </button>
+          </div>
+        </div>
+      )}
       <h2 className="text-lg sm:text-xl font-semibold mb-4">Environment</h2>
       
       {/* Grid Container with responsive sizing */}

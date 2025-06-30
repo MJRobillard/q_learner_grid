@@ -3,14 +3,21 @@ import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, onSna
 import { getAuth, signInAnonymously, onAuthStateChanged, User, signOut, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAmJvpRAPAIziH5Y1UyNl5X2Z1i5O0p-NU",
-  authDomain: "q-learner-board.firebaseapp.com",
-  projectId: "q-learner-board",
-  storageBucket: "q-learner-board.firebasestorage.app",
-  messagingSenderId: "665074188332",
-  appId: "1:665074188332:web:de84af905c2798e91a5189",
-  measurementId: "G-PQQXCWC8NE"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!
 };
+
+// Check for missing env vars
+for (const [key, value] of Object.entries(firebaseConfig)) {
+  if (!value) {
+    throw new Error(`Missing Firebase config environment variable: ${key}`);
+  }
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
