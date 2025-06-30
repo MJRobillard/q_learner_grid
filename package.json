@@ -11,6 +11,7 @@
   "dependencies": {
     "@tensorflow/tfjs-converter": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
+    "@vercel/analytics": "^1.5.0",
     "firebase": "^11.9.1",
     "ml-matrix": "^6.12.1",
     "next": "15.3.4",
