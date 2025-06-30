@@ -143,6 +143,15 @@ Q-Values: ${qValuesString}`;
   // Add state for dropdown
   const [batchCount, setBatchCount] = React.useState(10);
 
+  // Detect mobile (tailwind: sm = 640px)
+  const [isMobile, setIsMobile] = React.useState(false);
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 640);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   return (
     <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
       {/* Episode Controls and Stats - Mobile optimized */}
@@ -226,11 +235,24 @@ Q-Values: ${qValuesString}`;
                 if (maxQValue > 0) {
                   // Green gradient for positive Q
                   const intensity = Math.min(maxQValue / 50, 1);
-                  color = `rgba(34,197,94,${0.15 + 0.65 * intensity})`;
+                  if (isMobile) {
+                    // More saturated and opaque for mobile
+                    if (intensity > 0.66) color = 'rgba(16,185,129,0.95)'; // emerald-500
+                    else if (intensity > 0.33) color = 'rgba(52,211,153,0.85)'; // emerald-400
+                    else color = 'rgba(110,231,183,0.75)'; // emerald-300
+                  } else {
+                    color = `rgba(34,197,94,${0.15 + 0.65 * intensity})`;
+                  }
                 } else if (maxQValue < 0) {
                   // Red gradient for negative Q
                   const intensity = Math.min(Math.abs(maxQValue) / 50, 1);
-                  color = `rgba(239,68,68,${0.15 + 0.65 * intensity})`;
+                  if (isMobile) {
+                    if (intensity > 0.66) color = 'rgba(239,68,68,0.95)'; // red-500
+                    else if (intensity > 0.33) color = 'rgba(252,165,165,0.85)'; // red-300
+                    else color = 'rgba(254,202,202,0.75)'; // red-200
+                  } else {
+                    color = `rgba(239,68,68,${0.15 + 0.65 * intensity})`;
+                  }
                 }
                 cellStyle = { background: color };
               }
